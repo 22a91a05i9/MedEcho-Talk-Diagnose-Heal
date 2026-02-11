@@ -1,0 +1,9 @@
+{
+  "name": "MedEcho",
+  "description": "An advanced hospital management system featuring AI-driven consultations, appointment booking, and automated medical reporting.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}
