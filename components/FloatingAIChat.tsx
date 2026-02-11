@@ -1,17 +1,22 @@
-
 import React, { useState, useRef, useEffect } from 'react';
-import { Message } from '../types';
-import { getAIChatResponse } from '../services/geminiService';
+import { Message, MedicalReport } from '../types';
+import { getAIChatResponse, analyzeSymptoms } from '../services/geminiService';
+import { dbService } from '../services/dbService';
 import { 
   PaperAirplaneIcon, 
   ChatBubbleLeftRightIcon, 
   XMarkIcon, 
   ExclamationTriangleIcon,
   MicrophoneIcon,
-  SpeakerWaveIcon 
+  SpeakerWaveIcon,
+  CheckCircleIcon
 } from '@heroicons/react/24/solid';
 
-const FloatingAIChat: React.FC = () => {
+interface FloatingAIChatProps {
+  onReportGenerated?: (report: MedicalReport) => void;
+}
+
+const FloatingAIChat: React.FC<FloatingAIChatProps> = ({ onReportGenerated }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     { id: '1', sender: 'ai', text: 'Hi! I am your MedEcho assistant. How can I help you today?', timestamp: new Date() }
@@ -20,7 +25,9 @@ const FloatingAIChat: React.FC = () => {
   const [isTyping, setIsTyping] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [reportSaved, setReportSaved] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const user = dbService.auth.getCurrentUser();
 
   useEffect(() => {
     if (isOpen) {
@@ -42,36 +49,77 @@ const FloatingAIChat: React.FC = () => {
     recognition.onresult = (event: any) => {
       const transcript = event.results[0][0].transcript;
       setInput(transcript);
+      if (transcript.trim()) {
+        processMessage(transcript, true);
+      }
     };
     recognition.start();
   };
 
-  const handleReadAloud = (text: string) => {
-    if (isSpeaking) {
-      window.speechSynthesis.cancel();
-      setIsSpeaking(false);
-      return;
-    }
+  const speakText = (text: string) => {
+    window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.onstart = () => setIsSpeaking(true);
     utterance.onend = () => setIsSpeaking(false);
     window.speechSynthesis.speak(utterance);
   };
 
-  const handleSend = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || isTyping) return;
+  const saveToMedicalFiles = async (transcript: string) => {
+    if (!user || reportSaved) return;
+    
+    setIsTyping(true);
+    const analysis = await analyzeSymptoms(transcript);
+    setIsTyping(false);
+    
+    if (!analysis) return;
 
-    const userMsg: Message = { id: Date.now().toString(), sender: 'user', text: input, timestamp: new Date() };
+    const newReport: MedicalReport = {
+      id: 'ai-rpt-float-' + Date.now(),
+      patientId: user.id,
+      doctorId: 'medecho-ai',
+      doctorName: 'MedEcho AI Assistant',
+      date: new Date().toISOString().split('T')[0],
+      diagnosis: analysis.condition || 'Floating Consultation',
+      summary: analysis.summary || 'Clinical intake via quick chat.',
+      prescription: [analysis.advice || 'Standard precautions advised.'],
+      aiConfidence: analysis.confidence || 85,
+      vitals: {}
+    };
+
+    await dbService.reports.create(newReport);
+    setReportSaved(true);
+    if (onReportGenerated) onReportGenerated(newReport);
+  };
+
+  const processMessage = async (text: string, wasVoice: boolean) => {
+    const userMsg: Message = { id: Date.now().toString(), sender: 'user', text, timestamp: new Date() };
+    const currentHistory = messages.map(m => `${m.sender}: ${m.text}`).join('\n');
+    
     setMessages(prev => [...prev, userMsg]);
     setInput('');
     setIsTyping(true);
 
-    const aiResponse = await getAIChatResponse(input);
+    const aiResponse = await getAIChatResponse(text, currentHistory);
     const aiMsg: Message = { id: (Date.now() + 1).toString(), sender: 'ai', text: aiResponse || '', timestamp: new Date() };
     
     setMessages(prev => [...prev, aiMsg]);
     setIsTyping(false);
+
+    if (wasVoice && aiMsg.text) {
+      const textToSpeak = aiMsg.text.replace(/\[GENERATING CLINICAL REPORT\]/gi, '');
+      speakText(textToSpeak);
+    }
+
+    if (aiMsg.text.includes("[GENERATING CLINICAL REPORT]")) {
+      const fullTranscript = [...messages, userMsg, aiMsg].map(m => `${m.sender}: ${m.text}`).join('\n');
+      saveToMedicalFiles(fullTranscript);
+    }
+  };
+
+  const handleSend = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() || isTyping || reportSaved) return;
+    processMessage(input, false);
   };
 
   return (
@@ -84,8 +132,8 @@ const FloatingAIChat: React.FC = () => {
                 <ChatBubbleLeftRightIcon className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h3 className="font-bold text-sm">MedEcho</h3>
-                <p className="text-[10px] text-blue-100">Voice Enabled</p>
+                <h3 className="font-bold text-sm">MedEcho Chat</h3>
+                <p className="text-[10px] text-blue-100 uppercase font-black tracking-widest">{reportSaved ? 'Case Saved' : isListening ? 'Listening...' : 'Mirror Mode Active'}</p>
               </div>
             </div>
             <button onClick={() => setIsOpen(false)} className="hover:bg-white/10 p-1 rounded-full transition-colors">
@@ -107,8 +155,8 @@ const FloatingAIChat: React.FC = () => {
                   </p>
                   {m.sender === 'ai' && (
                     <button 
-                      onClick={() => handleReadAloud(m.text)}
-                      className="absolute -right-8 top-1 p-1 text-slate-300 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={() => speakText(m.text)}
+                      className={`absolute -right-8 top-1 p-1 text-slate-300 hover:text-blue-600 transition-opacity opacity-100 sm:opacity-0 sm:group-hover:opacity-100`}
                     >
                       <SpeakerWaveIcon className="w-3 h-3" />
                     </button>
@@ -127,18 +175,22 @@ const FloatingAIChat: React.FC = () => {
             )}
           </div>
 
-          <div className="bg-amber-50 px-4 py-2 flex items-start space-x-2 border-t border-amber-100">
-            <ExclamationTriangleIcon className="w-3 h-3 text-amber-600 mt-0.5" />
-            <p className="text-[8px] text-amber-800 font-bold leading-tight uppercase">
-              Notice: AI advice is NOT a medical diagnosis. Consult a real doctor.
-            </p>
+          <div className="bg-amber-50 px-4 py-2 flex items-center justify-between border-t border-amber-100">
+            <div className="flex items-start space-x-2">
+              <ExclamationTriangleIcon className="w-3 h-3 text-amber-600 mt-0.5" />
+              <p className="text-[8px] text-amber-800 font-bold leading-tight uppercase">
+                Notice: Automatic reporting on intake conclusion.
+              </p>
+            </div>
+            {reportSaved && <CheckCircleIcon className="w-4 h-4 text-emerald-600" />}
           </div>
 
           <form onSubmit={handleSend} className="p-3 bg-white border-t border-slate-100 flex items-center space-x-2">
             <button 
               type="button"
               onClick={handleSpeechInput}
-              className={`p-2 rounded-xl transition-all ${isListening ? 'bg-rose-500 text-white animate-pulse' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}
+              disabled={reportSaved}
+              className={`p-2 rounded-xl transition-all ${reportSaved ? 'opacity-20' : isListening ? 'bg-rose-500 text-white animate-pulse' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}
             >
               <MicrophoneIcon className="w-4 h-4" />
             </button>
@@ -147,12 +199,13 @@ const FloatingAIChat: React.FC = () => {
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder={isListening ? "Listening..." : "Ask anything..."}
-                className="w-full pl-4 pr-10 py-3 bg-slate-100 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none text-sm text-slate-800"
+                disabled={reportSaved}
+                placeholder={reportSaved ? "Consultation saved" : isListening ? "Listening..." : "How can I help?"}
+                className="w-full pl-4 pr-10 py-3 bg-slate-100 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none text-sm text-slate-800 shadow-inner"
               />
               <button
                 type="submit"
-                disabled={!input.trim() || isTyping}
+                disabled={!input.trim() || isTyping || reportSaved}
                 className="absolute right-1.5 p-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white rounded-lg transition-all"
               >
                 <PaperAirplaneIcon className="w-3.5 h-3.5" />

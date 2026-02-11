@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
 import { MedicalReport } from '../types';
@@ -5,7 +6,6 @@ import { analyzeSymptoms } from '../services/geminiService';
 import { 
   StopIcon, 
   VideoCameraIcon, 
-  CheckIcon,
   ExclamationTriangleIcon,
   GlobeAltIcon,
   UserCircleIcon
@@ -25,9 +25,9 @@ const VirtualDoctor: React.FC<VirtualDoctorProps> = ({ patientId, onSessionCompl
   const [isConnecting, setIsConnecting] = useState(false);
   const [isActive, setIsActive] = useState(false);
   const [chatOverlay, setChatOverlay] = useState<{sender: string, text: string}[]>([]);
-  const [visualizerData, setVisualizerData] = useState<number[]>(Array(30).fill(10));
+  const [visualizerData, setVisualizerData] = useState<number[]>(Array(20).fill(10));
   const [persona, setPersona] = useState<Persona>('Sarah');
-  const [language, setLanguage] = useState("Hindi");
+  const [language, setLanguage] = useState("English");
   
   const audioContextRef = useRef<AudioContext | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -35,10 +35,10 @@ const VirtualDoctor: React.FC<VirtualDoctorProps> = ({ patientId, onSessionCompl
   const transcriptionRef = useRef<string>("");
 
   const personas = {
-    Sarah: { img: "https://images.unsplash.com/photo-1559839734-2b71f1536783?auto=format&fit=crop&q=80&w=1200", voice: "Puck", desc: "Empathetic Female" },
-    James: { img: "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?q=80&w=1200&auto=format&fit=crop", voice: "Kore", desc: "Professional Male" },
-    Elena: { img: "https://images.unsplash.com/photo-1594824476967-48c8b964273f?q=80&w=1200&auto=format&fit=crop", voice: "Zephyr", desc: "Clear Alt-Female" },
-    Marcus: { img: "https://images.unsplash.com/photo-1537368910025-700350fe46c7?q=80&w=1200&auto=format&fit=crop", voice: "Charon", desc: "Deep Resonant Male" }
+    Sarah: { img: "https://images.unsplash.com/photo-1550831107-1553da8c8464?auto=format&fit=crop&q=80&w=1200", voice: "Puck", desc: "Empathetic" },
+    James: { img: "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?q=80&w=1200&auto=format&fit=crop", voice: "Kore", desc: "Professional" },
+    Elena: { img: "https://images.unsplash.com/photo-1594824476967-48c8b964273f?q=80&w=1200&auto=format&fit=crop", voice: "Zephyr", desc: "Pediatric" },
+    Marcus: { img: "https://images.unsplash.com/photo-1537368910025-700350fe46c7?q=80&w=1200&auto=format&fit=crop", voice: "Charon", desc: "Expert Surgeon" }
   };
 
   const decode = (base64: string) => {
@@ -88,7 +88,7 @@ const VirtualDoctor: React.FC<VirtualDoctorProps> = ({ patientId, onSessionCompl
             scriptProcessor.onaudioprocess = (e) => {
               const inputData = e.inputBuffer.getChannelData(0);
               const avg = inputData.reduce((acc, val) => acc + Math.abs(val), 0) / inputData.length;
-              setVisualizerData(prev => [...prev.slice(1), 10 + avg * 600]);
+              setVisualizerData(prev => [...prev.slice(1), 5 + avg * 400]);
               const int16 = new Int16Array(inputData.length);
               for (let i = 0; i < inputData.length; i++) int16[i] = inputData[i] * 32768;
               const pcmBlob = { data: encode(new Uint8Array(int16.buffer)), mimeType: 'audio/pcm;rate=16000' };
@@ -103,10 +103,10 @@ const VirtualDoctor: React.FC<VirtualDoctorProps> = ({ patientId, onSessionCompl
             if (msg.serverContent?.outputTranscription) {
               const text = msg.serverContent.outputTranscription.text;
               transcriptionRef.current += text + " ";
-              setChatOverlay(prev => [...prev.slice(-2), { sender: 'Dr. Echo', text }]);
+              setChatOverlay(prev => [...prev.slice(-1), { sender: 'Doc', text }]);
             }
             if (msg.serverContent?.inputTranscription) {
-              setChatOverlay(prev => [...prev.slice(-2), { sender: 'You', text: msg.serverContent!.inputTranscription!.text }]);
+              setChatOverlay(prev => [...prev.slice(-1), { sender: 'You', text: msg.serverContent!.inputTranscription!.text }]);
             }
             const audioBase64 = msg.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
             if (audioBase64) {
@@ -125,13 +125,10 @@ const VirtualDoctor: React.FC<VirtualDoctorProps> = ({ patientId, onSessionCompl
           onclose: () => setIsActive(false),
         },
         config: {
+          // Fixed typo: responseModalities
           responseModalities: [Modality.AUDIO],
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: personas[persona].voice as any } } },
-          systemInstruction: `You are Dr. Echo, the MedEcho AI. 
-          The patient preferred language is ${language}. 
-          Always greet and speak in ${language} or the patient's language. 
-          Your goal: Extract symptoms, be empathetic, and provide a preliminary diagnosis. 
-          Use common terms suitable for rural healthcare users.`,
+          systemInstruction: `You are Dr. Echo. Greeting in ${language}. Ask step-by-step. extracted clinical data later.`,
           outputAudioTranscription: {},
           inputAudioTranscription: {},
         }
@@ -146,48 +143,44 @@ const VirtualDoctor: React.FC<VirtualDoctorProps> = ({ patientId, onSessionCompl
     if (sessionPromiseRef.current) (await sessionPromiseRef.current).close();
     if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
     setIsActive(false);
-
-    // Academic Project: Perform automated NLP diagnosis extraction
     const analysis = await analyzeSymptoms(transcriptionRef.current);
-
     const newReport: MedicalReport = {
       id: 'r-' + Math.random().toString(36).substr(2, 9),
       patientId: patientId,
       doctorId: 'ai-assistant', 
       date: new Date().toISOString().split('T')[0],
-      doctorName: `AI-Assistant (${persona})`,
-      diagnosis: analysis?.condition || 'General Assessment',
-      aiConfidence: analysis?.confidence || 75,
+      doctorName: `AI-Doc (${persona})`,
+      diagnosis: analysis?.condition || 'Checkup Completed',
+      aiConfidence: analysis?.confidence || 80,
       inputLanguage: language,
-      summary: analysis?.advice || transcriptionRef.current || 'Session completed.',
-      prescription: ['Follow up with clinical staff', 'Observation'],
+      summary: analysis?.advice || transcriptionRef.current || 'Session recorded.',
+      prescription: ['Follow-up as advised'],
       vitals: { temperature: '98.6F' }
     };
     onSessionComplete(newReport);
   };
 
   return (
-    <div className="min-h-[calc(100vh-64px)] p-6 md:p-12 max-w-7xl mx-auto flex flex-col items-center">
-      
+    <div className="p-4 sm:p-8 max-w-7xl mx-auto flex flex-col items-center min-h-[calc(100vh-100px)]">
       {!isActive && !isConnecting && (
-        <div className="w-full max-w-5xl space-y-10 mb-12 animate-in fade-in slide-in-from-top-4 duration-700">
+        <div className="w-full max-w-4xl space-y-8 mb-8 animate-in fade-in slide-in-from-top-4 duration-500">
            <div className="text-center">
-             <h2 className="text-4xl font-black text-slate-800 tracking-tight mb-2">MedEcho Virtual Clinic</h2>
-             <p className="text-slate-500 font-medium">Talk to our AI specialist in your local language.</p>
+             <h2 className="text-2xl sm:text-4xl font-black text-slate-800 tracking-tight">Virtual Clinic</h2>
+             <p className="text-slate-500 text-sm mt-1">Talk to our AI specialist instantly.</p>
            </div>
 
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
-             <div className="bg-white p-8 rounded-[3rem] shadow-xl border border-slate-100 space-y-6">
-               <h3 className="text-lg font-black text-slate-700 flex items-center space-x-2">
-                 <GlobeAltIcon className="w-5 h-5 text-blue-600" />
-                 <span>1. Select Language</span>
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+             <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100">
+               <h3 className="text-sm font-black text-slate-700 flex items-center space-x-2 mb-4">
+                 <GlobeAltIcon className="w-4 h-4 text-blue-600" />
+                 <span>1. Language</span>
                </h3>
-               <div className="grid grid-cols-2 gap-2">
-                 {INDIAN_LANGUAGES.map(lang => (
+               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                 {INDIAN_LANGUAGES.slice(0, 6).map(lang => (
                    <button 
                      key={lang}
                      onClick={() => setLanguage(lang)}
-                     className={`px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest transition-all ${language === lang ? 'bg-blue-600 text-white shadow-lg' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}
+                     className={`px-3 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${language === lang ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-50 text-slate-400'}`}
                    >
                      {lang}
                    </button>
@@ -195,21 +188,21 @@ const VirtualDoctor: React.FC<VirtualDoctorProps> = ({ patientId, onSessionCompl
                </div>
              </div>
 
-             <div className="space-y-4">
-               <h3 className="text-lg font-black text-slate-700 ml-4 flex items-center space-x-2">
-                 <UserCircleIcon className="w-5 h-5 text-indigo-600" />
-                 <span>2. Choose AI Persona</span>
+             <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100">
+               <h3 className="text-sm font-black text-slate-700 flex items-center space-x-2 mb-4">
+                 <UserCircleIcon className="w-4 h-4 text-indigo-600" />
+                 <span>2. Specialist</span>
                </h3>
-               <div className="grid grid-cols-2 gap-4">
+               <div className="grid grid-cols-2 gap-3">
                  {(Object.keys(personas) as Persona[]).map((name) => (
                    <button 
                      key={name}
                      onClick={() => setPersona(name)}
-                     className={`group relative overflow-hidden rounded-3xl border-4 transition-all ${persona === name ? 'border-indigo-600 ring-8 ring-indigo-500/10 scale-105' : 'border-white hover:border-slate-200'}`}
+                     className={`relative rounded-2xl overflow-hidden border-2 transition-all ${persona === name ? 'border-indigo-600 ring-4 ring-indigo-100' : 'border-slate-50'}`}
                    >
-                     <img src={personas[name].img} alt={name} className={`w-full h-32 object-cover ${persona === name ? 'brightness-110' : 'brightness-75'}`} />
-                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 flex flex-col justify-end p-3 text-left">
-                        <p className="text-white font-black text-[10px]">{name}</p>
+                     <img src={personas[name].img} alt={name} className="w-full h-20 object-cover" />
+                     <div className="absolute inset-0 bg-black/40 flex items-end p-2">
+                        <span className="text-white font-black text-[9px] uppercase">{name}</span>
                      </div>
                    </button>
                  ))}
@@ -219,40 +212,36 @@ const VirtualDoctor: React.FC<VirtualDoctorProps> = ({ patientId, onSessionCompl
         </div>
       )}
 
-      <div className="relative w-full aspect-video bg-slate-900 rounded-[4rem] shadow-2xl overflow-hidden border-[12px] border-white group">
+      <div className="relative w-full max-w-5xl aspect-square sm:aspect-video bg-slate-900 rounded-[2.5rem] sm:rounded-[4rem] shadow-2xl overflow-hidden border-[6px] sm:border-[12px] border-white group">
         <img 
           src={personas[persona].img} 
-          alt="Virtual Doctor" 
-          className={`w-full h-full object-cover transition-all duration-1000 ${isActive ? 'scale-105 brightness-110' : 'scale-100 brightness-50'}`}
+          alt="Doc" 
+          className={`w-full h-full object-cover transition-all duration-1000 ${isActive ? 'scale-105' : 'brightness-50'}`}
         />
         
-        {/* HUD UI */}
-        <div className="absolute inset-x-12 top-12 flex flex-col space-y-4 items-start pointer-events-none">
-          <div className="bg-black/40 backdrop-blur-xl px-4 py-2 rounded-full border border-white/10 text-white flex items-center space-x-2">
-            <GlobeAltIcon className="w-4 h-4 text-blue-400" />
-            <span className="text-[10px] font-black uppercase tracking-widest">Input: {language}</span>
+        {/* HUD UI - Responsive stacking */}
+        <div className="absolute inset-x-6 sm:inset-x-12 top-6 sm:top-12 flex flex-col space-y-3 items-start pointer-events-none">
+          <div className="bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 text-white text-[9px] font-black uppercase tracking-widest">
+            {language} Mode
           </div>
           {chatOverlay.map((msg, i) => (
             <div 
               key={i} 
-              className={`max-w-[70%] p-6 rounded-[2.5rem] shadow-2xl backdrop-blur-2xl border border-white/10 animate-in slide-in-from-left-4 duration-300 ${
-                msg.sender.includes('Echo') 
-                ? 'bg-blue-600/30 text-white border-blue-400/20' 
-                : 'bg-white/10 text-slate-200 self-end border-white/5'
+              className={`max-w-[85%] sm:max-w-[60%] p-4 sm:p-6 rounded-[1.5rem] sm:rounded-[2.5rem] backdrop-blur-xl border border-white/10 ${
+                msg.sender.includes('Doc') ? 'bg-blue-600/20 text-white' : 'bg-white/10 text-slate-100'
               }`}
             >
-              <p className="text-[10px] font-black uppercase tracking-widest opacity-50 mb-1">{msg.sender}</p>
-              <p className="text-lg font-medium leading-relaxed italic">"{msg.text}"</p>
+              <p className="text-[10px] sm:text-lg font-medium leading-relaxed">"{msg.text}"</p>
             </div>
           ))}
         </div>
 
         {isActive && (
-          <div className="absolute bottom-10 inset-x-0 flex items-end justify-center space-x-1 h-20 px-24">
+          <div className="absolute bottom-8 inset-x-0 flex items-end justify-center space-x-1 h-12 px-10">
             {visualizerData.map((val, i) => (
               <div 
                 key={i} 
-                className="bg-blue-400/80 rounded-full w-1.5 transition-all duration-75 shadow-[0_0_20px_rgba(96,165,250,0.6)]"
+                className="bg-blue-400/80 rounded-full w-1 transition-all duration-75"
                 style={{ height: `${val}%` }}
               ></div>
             ))}
@@ -260,44 +249,40 @@ const VirtualDoctor: React.FC<VirtualDoctorProps> = ({ patientId, onSessionCompl
         )}
 
         {!isActive && !isConnecting && (
-          <div className="absolute inset-0 flex items-center justify-center">
+          <div className="absolute inset-0 flex items-center justify-center p-6">
             <button 
               onClick={startSession}
-              className="bg-white/95 backdrop-blur-xl p-10 rounded-[4rem] shadow-2xl text-center group hover:scale-105 transition-all"
+              className="bg-white/95 p-6 sm:p-10 rounded-[2rem] sm:rounded-[4rem] shadow-2xl text-center active:scale-95 transition-all w-full sm:w-auto"
             >
-              <div className="w-24 h-24 bg-blue-600 rounded-[2rem] flex items-center justify-center mx-auto text-white shadow-2xl animate-pulse mb-6">
-                <VideoCameraIcon className="w-12 h-12" />
-              </div>
-              <h3 className="text-3xl font-black text-slate-800 tracking-tight">Start Multilingual Checkup</h3>
-              <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px] mt-2">MedEcho AI Core Ready</p>
+              <VideoCameraIcon className="w-10 h-10 sm:w-12 sm:h-12 text-blue-600 mx-auto mb-4" />
+              <h3 className="text-xl sm:text-3xl font-black text-slate-800">Start Checkup</h3>
+              <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px] mt-2">MedEcho AI Ready</p>
             </button>
           </div>
         )}
 
         {isConnecting && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 backdrop-blur-xl text-white">
-            <div className="w-20 h-20 border-[6px] border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
-            <p className="text-sm font-black uppercase mt-8 animate-pulse text-blue-200">Processing Audio Stream...</p>
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 backdrop-blur-md text-white p-6 text-center">
+            <div className="w-12 h-12 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
+            <p className="text-xs font-black uppercase mt-6 tracking-widest">Connecting Session...</p>
           </div>
         )}
       </div>
 
       {isActive && (
-        <div className="mt-12 flex space-x-6">
-          <button 
-            onClick={endSession}
-            className="bg-rose-500 hover:bg-rose-600 text-white font-black py-5 px-14 rounded-[2.5rem] flex items-center space-x-4 shadow-xl hover:-translate-y-1 transition-all"
-          >
-            <StopIcon className="w-7 h-7" />
-            <span className="uppercase tracking-widest text-sm">Analyze Symptoms</span>
-          </button>
-        </div>
+        <button 
+          onClick={endSession}
+          className="mt-8 bg-rose-500 text-white font-black py-4 px-10 rounded-[2rem] flex items-center space-x-3 shadow-xl active:scale-95 transition-all"
+        >
+          <StopIcon className="w-6 h-6" />
+          <span className="uppercase tracking-widest text-xs">Finish & Analyze</span>
+        </button>
       )}
 
-      <div className="mt-12 max-w-2xl w-full bg-blue-50/50 p-6 rounded-[2.5rem] border border-blue-100 flex items-start space-x-4">
-        <ExclamationTriangleIcon className="w-6 h-6 text-blue-600 flex-shrink-0" />
-        <p className="text-[11px] font-bold text-blue-800 leading-relaxed uppercase">
-          ACADEMIC PROJECT: This module uses Gemini AI to extract clinical entities in ${language}. For emergency, contact 102/108 immediately.
+      <div className="mt-8 max-w-2xl w-full bg-blue-50/50 p-4 rounded-2xl border border-blue-100 flex items-start space-x-3">
+        <ExclamationTriangleIcon className="w-5 h-5 text-blue-600 flex-shrink-0" />
+        <p className="text-[10px] font-bold text-blue-800 leading-tight uppercase">
+          ACADEMIC PROJECT: Clinical entities are AI-extracted. Call 102/108 for emergencies.
         </p>
       </div>
     </div>
