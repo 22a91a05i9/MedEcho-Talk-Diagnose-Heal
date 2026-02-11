@@ -1,15 +1,18 @@
 
+// Fix: Added React import to resolve the 'Cannot find namespace React' error when using React.FC.
 import React, { useState, useEffect, useMemo } from 'react';
 import { dbService } from '../services/dbService';
-import { User, Appointment, TimeSlot } from '../types';
+import { User, Appointment } from '../types';
 import { 
-  VideoCameraIcon, 
-  UserGroupIcon, 
   CalendarIcon, 
   MagnifyingGlassIcon,
   ClockIcon,
   ChevronRightIcon,
-  CheckBadgeIcon
+  CheckBadgeIcon,
+  CheckCircleIcon,
+  UserIcon,
+  VideoCameraIcon,
+  MapPinIcon
 } from '@heroicons/react/24/solid';
 
 interface AppointmentBookingProps {
@@ -24,6 +27,8 @@ const AppointmentBooking: React.FC<AppointmentBookingProps> = ({ onBook }) => {
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [type, setType] = useState<'VIRTUAL' | 'IN-PERSON'>('IN-PERSON');
   const [searchTerm, setSearchTerm] = useState('');
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [bookedAptSummary, setBookedAptSummary] = useState<(Partial<Appointment> & { doctorAvatar?: string }) | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -40,7 +45,6 @@ const AppointmentBooking: React.FC<AppointmentBookingProps> = ({ onBook }) => {
     doc.specialization?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Helper to generate 30-min intervals
   const generateSlots = (startTime: string, endTime: string) => {
     const slots: string[] = [];
     let [h, m] = startTime.split(':').map(Number);
@@ -67,13 +71,11 @@ const AppointmentBooking: React.FC<AppointmentBookingProps> = ({ onBook }) => {
 
     if (!daySched || !daySched.isActive) return [];
 
-    // 1. Generate all possible slots from working hours
     let slots: string[] = [];
     daySched.slots.forEach(range => {
       slots = [...slots, ...generateSlots(range.startTime, range.endTime)];
     });
 
-    // 2. Filter out frozen slots (blackouts)
     const blocked = selectedDoc.blockedSlots?.filter(slot => slot.date === date) || [];
     slots = slots.filter(slotTime => {
       const [h, m] = slotTime.split(':').map(Number);
@@ -90,7 +92,6 @@ const AppointmentBooking: React.FC<AppointmentBookingProps> = ({ onBook }) => {
       return true;
     });
 
-    // 3. Filter out already booked appointments
     const booked = allAppointments.filter(a => a.doctorId === selectedDoc.id && a.date === date && a.status !== 'CANCELLED');
     slots = slots.filter(slotTime => !booked.some(a => a.time === slotTime));
 
@@ -99,19 +100,27 @@ const AppointmentBooking: React.FC<AppointmentBookingProps> = ({ onBook }) => {
 
   const handleBookClick = () => {
     if (!selectedDoc || !selectedTime) return;
-    onBook({ 
+    const summary = { 
       doctorId: selectedDoc.id, 
       doctorName: selectedDoc.name, 
+      doctorAvatar: selectedDoc.avatar,
       date, 
       time: selectedTime, 
       type 
-    });
-    setSelectedDoc(null);
-    setSelectedTime(null);
+    };
+    setBookedAptSummary(summary);
+    setShowSuccessModal(true);
+  };
+
+  const confirmFinalBooking = () => {
+    if (bookedAptSummary) {
+      onBook(bookedAptSummary);
+    }
+    setShowSuccessModal(false);
   };
 
   return (
-    <div className="p-10 max-w-7xl mx-auto space-y-12 animate-in fade-in duration-500">
+    <div className="p-10 max-w-7xl mx-auto space-y-12 animate-in fade-in duration-500 relative">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div>
           <h2 className="text-4xl font-black text-slate-800 tracking-tight uppercase">Book Consultation</h2>
@@ -130,7 +139,6 @@ const AppointmentBooking: React.FC<AppointmentBookingProps> = ({ onBook }) => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-        {/* Doctor Selection Panel */}
         <div className="lg:col-span-5 space-y-4">
           <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Available Specialists</label>
           <div className="space-y-4 max-h-[700px] overflow-y-auto pr-2 custom-scrollbar">
@@ -152,7 +160,7 @@ const AppointmentBooking: React.FC<AppointmentBookingProps> = ({ onBook }) => {
                     <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest mt-1">{doc.specialization}</p>
                     <div className="flex items-center space-x-2 mt-2">
                        <ClockIcon className="w-3 h-3 text-slate-300" />
-                       <span className="text-[9px] font-bold text-slate-400 uppercase">Next Slot: Today 10:00 AM</span>
+                       <span className="text-[9px] font-bold text-slate-400 uppercase">Available Slots</span>
                     </div>
                   </div>
                 </div>
@@ -162,7 +170,6 @@ const AppointmentBooking: React.FC<AppointmentBookingProps> = ({ onBook }) => {
           </div>
         </div>
 
-        {/* Slot Selection & Form Panel */}
         <div className="lg:col-span-7 bg-white rounded-[4rem] shadow-2xl border border-slate-50 overflow-hidden flex flex-col">
           {selectedDoc ? (
             <div className="flex-1 flex flex-col animate-in slide-in-from-right-10 duration-500">
@@ -189,16 +196,6 @@ const AppointmentBooking: React.FC<AppointmentBookingProps> = ({ onBook }) => {
               <div className="p-10 flex-1">
                 <div className="flex justify-between items-center mb-6">
                   <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Available Time Slots</h4>
-                  <div className="flex items-center space-x-4">
-                    <div className="flex items-center space-x-1.5">
-                       <div className="w-2 h-2 rounded-full bg-indigo-500"></div>
-                       <span className="text-[8px] font-black uppercase text-slate-400">Available</span>
-                    </div>
-                    <div className="flex items-center space-x-1.5">
-                       <div className="w-2 h-2 rounded-full bg-slate-100"></div>
-                       <span className="text-[8px] font-black uppercase text-slate-400">Reserved</span>
-                    </div>
-                  </div>
                 </div>
 
                 {availableSlots.length > 0 ? (
@@ -232,14 +229,14 @@ const AppointmentBooking: React.FC<AppointmentBookingProps> = ({ onBook }) => {
                   className="w-full py-6 bg-slate-900 text-white rounded-[2rem] flex items-center justify-center space-x-3 font-black uppercase text-xs tracking-[0.2em] shadow-2xl hover:bg-black transition-all disabled:opacity-20 active:scale-95"
                 >
                   <CheckBadgeIcon className="w-5 h-5" />
-                  <span>Confirm Clinical Visit</span>
+                  <span>Review & Book</span>
                 </button>
               </div>
             </div>
           ) : (
             <div className="h-full flex flex-col items-center justify-center p-20 text-center space-y-8">
               <div className="w-32 h-32 bg-indigo-50 rounded-[3rem] flex items-center justify-center text-indigo-200">
-                <UserGroupIcon className="w-16 h-16" />
+                <UserIcon className="w-16 h-16" />
               </div>
               <div>
                 <h3 className="text-2xl font-black text-slate-800 uppercase tracking-tight mb-2">Patient Gateway</h3>
@@ -249,6 +246,63 @@ const AppointmentBooking: React.FC<AppointmentBookingProps> = ({ onBook }) => {
           )}
         </div>
       </div>
+
+      {/* Success Confirmation Modal */}
+      {showSuccessModal && bookedAptSummary && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-md rounded-[3.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+            <div className="bg-emerald-600 p-12 flex flex-col items-center text-white">
+              <div className="relative mb-6">
+                <img src={bookedAptSummary.doctorAvatar} alt={bookedAptSummary.doctorName} className="w-24 h-24 rounded-[1.8rem] object-cover border-4 border-white/20 shadow-2xl" />
+                <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-lg">
+                   <CheckCircleIcon className="w-8 h-8 text-emerald-600" />
+                </div>
+              </div>
+              <h3 className="text-3xl font-black uppercase tracking-tighter">Confirmed!</h3>
+              <p className="text-emerald-100 text-[10px] font-black uppercase tracking-[0.2em] mt-2">Appointment Secured</p>
+            </div>
+            
+            <div className="p-10 space-y-8">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                  <div className="flex items-center space-x-3">
+                    <UserIcon className="w-5 h-5 text-slate-400" />
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Doctor</span>
+                  </div>
+                  <span className="font-black text-slate-800">{bookedAptSummary.doctorName}</span>
+                </div>
+
+                <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                  <div className="flex items-center space-x-3">
+                    <CalendarIcon className="w-5 h-5 text-slate-400" />
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Date & Time</span>
+                  </div>
+                  <span className="font-black text-slate-800">{bookedAptSummary.date} @ {bookedAptSummary.time}</span>
+                </div>
+
+                <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                  <div className="flex items-center space-x-3">
+                    {bookedAptSummary.type === 'VIRTUAL' ? <VideoCameraIcon className="w-5 h-5 text-slate-400" /> : <MapPinIcon className="w-5 h-5 text-slate-400" />}
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Type</span>
+                  </div>
+                  <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase ${bookedAptSummary.type === 'VIRTUAL' ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-800'}`}>
+                    {bookedAptSummary.type}
+                  </span>
+                </div>
+              </div>
+
+              <div className="pt-4">
+                <button 
+                  onClick={confirmFinalBooking}
+                  className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl hover:bg-black transition-all"
+                >
+                  Continue to Dashboard
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

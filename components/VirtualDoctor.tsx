@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
 import { MedicalReport } from '../types';
@@ -36,10 +35,10 @@ const VirtualDoctor: React.FC<VirtualDoctorProps> = ({ patientId, onSessionCompl
   const transcriptionRef = useRef<string>("");
 
   const personas = {
-    Sarah: { img: "https://images.unsplash.com/photo-1559839734-2b71f1536783?q=80&w=1200", voice: "Puck", desc: "Empathetic Female" },
-    James: { img: "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?q=80&w=1200", voice: "Kore", desc: "Professional Male" },
-    Elena: { img: "https://images.unsplash.com/photo-1594824476967-48c8b964273f?q=80&w=1200", voice: "Zephyr", desc: "Clear Alt-Female" },
-    Marcus: { img: "https://images.unsplash.com/photo-1622253692010-333f2da6031f?q=80&w=1200", voice: "Charon", desc: "Deep Resonant Male" }
+    Sarah: { img: "https://images.unsplash.com/photo-1559839734-2b71f1536783?auto=format&fit=crop&q=80&w=1200", voice: "Puck", desc: "Empathetic Female" },
+    James: { img: "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?q=80&w=1200&auto=format&fit=crop", voice: "Kore", desc: "Professional Male" },
+    Elena: { img: "https://images.unsplash.com/photo-1594824476967-48c8b964273f?q=80&w=1200&auto=format&fit=crop", voice: "Zephyr", desc: "Clear Alt-Female" },
+    Marcus: { img: "https://images.unsplash.com/photo-1537368910025-700350fe46c7?q=80&w=1200&auto=format&fit=crop", voice: "Charon", desc: "Deep Resonant Male" }
   };
 
   const decode = (base64: string) => {
@@ -151,11 +150,10 @@ const VirtualDoctor: React.FC<VirtualDoctorProps> = ({ patientId, onSessionCompl
     // Academic Project: Perform automated NLP diagnosis extraction
     const analysis = await analyzeSymptoms(transcriptionRef.current);
 
-    // Fixed: Added missing doctorId to comply with MedicalReport interface
     const newReport: MedicalReport = {
       id: 'r-' + Math.random().toString(36).substr(2, 9),
       patientId: patientId,
-      doctorId: 'ai-assistant', // Assigned a default ID for the AI consultant to satisfy the type requirement
+      doctorId: 'ai-assistant', 
       date: new Date().toISOString().split('T')[0],
       doctorName: `AI-Assistant (${persona})`,
       diagnosis: analysis?.condition || 'General Assessment',

@@ -1,4 +1,3 @@
-
 import { User, Appointment, MedicalReport } from './types';
 
 export const MOCK_PATIENTS: User[] = [
@@ -14,7 +13,7 @@ export const MOCK_DOCTORS: User[] = [
     email: 'sarah.w@medecho.ai',
     role: 'DOCTOR',
     specialization: 'Cardiologist',
-    avatar: 'https://images.unsplash.com/photo-1638202993928-7267aad84c31?auto=format&fit=crop&q=80&w=800',
+    avatar: 'https://images.unsplash.com/photo-1559839734-2b71f1536783?auto=format&fit=crop&q=80&w=800',
     contact: '+1 234 567 890',
     isAvailable: true,
     daySchedules: Array.from({length: 7}, (_, i) => ({
@@ -59,7 +58,7 @@ export const MOCK_DOCTORS: User[] = [
     email: 'marcus.c@medecho.ai',
     role: 'DOCTOR',
     specialization: 'Orthopedic Surgeon',
-    avatar: 'https://images.unsplash.com/photo-1622253692010-333f2da6031f?auto=format&fit=crop&q=80&w=800',
+    avatar: 'https://images.unsplash.com/photo-1537368910025-700350fe46c7?auto=format&fit=crop&q=80&w=800',
     contact: '+1 234 567 893',
     isAvailable: true,
     daySchedules: Array.from({length: 7}, (_, i) => ({

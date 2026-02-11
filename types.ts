@@ -72,3 +72,14 @@ export interface Message {
   text: string;
   timestamp: Date;
 }
+
+export interface AppNotification {
+  id: string;
+  userId: string;
+  title: string;
+  message: string;
+  type: 'REMINDER' | 'SUCCESS' | 'ALERT';
+  timestamp: Date;
+  isRead: boolean;
+  appointmentId?: string;
+}
