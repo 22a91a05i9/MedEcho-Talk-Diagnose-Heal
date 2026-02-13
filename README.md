@@ -1,7 +1,7 @@
 <div align="center">
 <img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
 </div>
-Live Demo : [https://22a91a05i9.github.io/MedEcho-Talk-Diagnose-Heal/](https://22a91a05i9.github.io/MedEcho-Talk-Diagnose-Heal/)
+Live Demo : [Video](https://22a91a05i9.github.io/MedEcho-Talk-Diagnose-Heal/)
 
 now you can access ui through this link
 
