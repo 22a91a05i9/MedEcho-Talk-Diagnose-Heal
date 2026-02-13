@@ -5,9 +5,6 @@ Live Demo : [Video](https://22a91a05i9.github.io/MedEcho-Talk-Diagnose-Heal/)
 
 now you can access ui through this link
 
-now you can access ui through this link
-
-now you can access ui through this link
 # Run and deploy your AI Studio app
 
 This contains everything you need to run your app locally.
